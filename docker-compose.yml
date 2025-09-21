@@ -1,0 +1,84 @@
+services:
+  ollama:
+    build:
+      context: .
+      dockerfile: Dockerfile.ollama
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ${PWD}:/app
+      - ${PWD}/ollama_data:/root/.ollama
+    entrypoint: ["/bin/bash", "/app/entrypoint.sh"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '12.00'
+    #       memory: 12G          
+    networks:
+      - agentic-net
+    environment:
+      - GIN_MODE=release
+      - OLLAMA_NUM_PARALLEL=2
+      - OLLAMA_MAX_LOADED_MODELS=2
+      - OLLAMA_KEEP_ALIVE=5m
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -f http://localhost:11434/api/tags || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  llm_service:
+    build:
+      context: ./llm_service
+      dockerfile: Dockerfile
+    container_name: llm_service
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - USER_AGENT=myagent
+    volumes:
+      - ${PWD}/documents:/app/documents
+    ports:
+      - "80:8001"
+    networks:
+      - agentic-net
+    depends_on:
+      - ollama
+      - qdrant
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: always
+    container_name: qdrant
+    ports:
+      - 6333:6333  # HTTP API
+      - 6334:6334  # gRPC API
+    volumes:
+      - ${PWD}/qdrant_data:/qdrant/storage
+    environment:
+      - QDRANT__LOG_LEVEL=INFO
+    networks:
+      - agentic-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/readyz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  ollama_data:
+  qdrant_data:
+
+networks:
+  agentic-net:
+    driver: bridge
