@@ -1,4 +1,4 @@
-# Agentic RAG APP with FastAPI, Ollama and Vue.js UI 
+## Agentic RAG APP with FastAPI, Ollama and Vue.js UI 
 
 
 The fantastic LangGraph's Agentic RAG  moves beyond simple retrieval to intelligent, goal-oriented problem-solving, making it powerful for complex, real-world applications. Agentic RAG improves answer quality and reliability by planning multi-step reasoning, issuing adaptive retrievals, using tools (search, code, SQL) for grounding, and running self-critique loops to verify claims and reduce hallucinations. 
@@ -153,6 +153,12 @@ Additinaly you can also observe  the ``Qdrant`` integrated dashboard :
 ``http://localhost:6333/dashboard#/collections``
 
 
+In the end, don't forget to  shut down the app gracefully :
+
+```sh
+docker compose down
+```
+
 ## Selecting other LLMs or embedded models
 
 
@@ -212,6 +218,28 @@ Now,  run the llm-servie sparatly in other ``CMD`` by `` docker compose up --bui
 
 
 Once you are happy with your modifications, pack the UI into a ``dist`` folder using the command ``npm run build`` and replace it with the old one.
+
+## LLM service features
+
+
+In adherence to the official [docs](https://docs.langchain.com/oss/python/langgraph/agentic-rag), I kept the foundational code in [graph.py](llm_service/graph.py)  unaltered. 
+
+I moved the application's advanced features  into separate modules [tools.py](llm_service/tools.py) and [main.py](llm_service/main.py). Below are some of these features and the architectural rationale :
+
+
+* Thread-safe hot-swappable retriever tool using a singleton with RW-locks: The RetrieverToolManager ensures only one live retriever/tool instance while allowing safe refreshes. This avoids race conditions during concurrent inject/delete and ask calls.
+
+* Debounced graph recompilation: After data mutations, I refresh the retriever and rebuild the graph, but with a short cooldown to prevent thrashing if multiple injects happen quickly.
+
+* Startup compilation: I compile the graph at startup for faster first-request latency. If you want truly lazy load, remove the call in on_startup and rely on the guard inside /ask.
+
+* Visualization is best-effort: Failures to write the PNG won’t crash the app.
+
+* Logging: Structured enough to debug issues without flooding at INFO level. Set LOG_LEVEL=DEBUG locally for deeper insight.
+
+* /ask streaming: Preserves my pretty_print trace but confines it to the response body instead of standard output.
+
+* Error handling: Consistent 500 on unexpected errors and 400 for bad requests.
 
 
 ## Discussion
